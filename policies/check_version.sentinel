@@ -1,0 +1,51 @@
+# NOTE that this will check the service_version variable and compare to that of the output of the version setting workspace
+
+import "tfplan"
+import "tfstate"
+
+all_trstates = func() {
+    trstates = []
+    for tfstate.module_paths as path {
+        trs = values(tfstate.module(path).data.terraform_remote_state) else []
+        for trs as _, r {
+            trstates += values(r)
+        }
+    }
+    print(trstates)
+    return trstates
+}
+
+check_version = func() {
+    vcstates = []
+    trstates = all_trstates()
+
+    print(trstates)
+    for trstates as trstate {
+        if "service_name" in keys(trstate.attr) {
+            if trstate.attr.service_name == tfplan.variables.service_name {
+                if "release_version" in keys(trstate.attr) {
+                    release_version = trstate.attr.release_version
+                    if release_version == tfplan.variables.service_version {
+                        return true
+                    } else {
+                        print("Your version and the allowed versions are different")
+                        print("Please fix. ")
+                        return false
+                    }
+                }
+            }
+        }
+    }
+    return true
+}
+
+version_check = check_version()
+release_allowed = rule { 
+  	(version_check)
+}
+
+# Main rule that requires other rules to be true
+main = rule {
+  (release_allowed) else true
+}
+
