@@ -1,3 +1,4 @@
+variable "organization" {}
 resource "tfe_sentinel_policy" "test" {
   name = "check-version"
   organization = "${var.organization}"
