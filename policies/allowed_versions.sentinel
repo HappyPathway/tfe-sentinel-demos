@@ -3,6 +3,8 @@
 import "tfplan"
 import "tfstate"
 
+global_lock = false
+
 all_trstates = func() {
     trstates = []
     for tfstate.module_paths as path {
@@ -29,15 +31,18 @@ enforce_version = func() {
 }
 
 verify_validator = func() {
+    if global_lock == true {
+        return false
+    }
     vcstates = []
     trstates = all_trstates()
     for trstates as trstate {
-        enforce_version = trstate.attr.enforce_version
         if "service_name" in keys(trstate.attr) {
             if "service_version" in keys(trstate.attr) {
                 if "service_version_validator" in keys(trstate.attr) {
                     if trstate.attr {
                         if trstate.attr.service_name != tfplan.variables.service_name {
+                            global_lock = true
                             return false
                         }
                     }
@@ -49,24 +54,39 @@ verify_validator = func() {
 }
 
 check_version = func() {
+    if global_lock == true {
+        return false
+    }
     vcstates = []
     trstates = all_trstates()
     for trstates as trstate {
+        print("TR State: ", trstate)
         if "service_name" in keys(trstate.attr) {
             if trstate.attr.service_name == tfplan.variables.service_name {
                 if "allowed_versions" in keys(trstate.attr) {
                     allowed_versions = trstate.attr.allowed_versions
                     if tfplan.variables.service_version in allowed_versions  {
+                        print("Allowed to Release... ")
+                        print("Allowed Versions: ", allowed_versions)
+                        print("Releasing Version: ", tfplan.variables.service_version)
                         return true
                     } else {
                         print("Your version and the allowed versions are different")
                         print("Please fix. ")
                         print("Allowed Versions: ", allowed_versions)
                         print("Your Version: ", tfplan.variables.service_version)
+                        global_lock = true
                         return false
                     }
+                } else {
+                    print("Allowed Versions Not Reported.")
                 }
+            } else {
+                print("TR State Service Name: ", trstate.attr.service_name)
+                print("TFPlan Service Name: ", tfplan.variables.service_name)
             }
+        } else {
+            print("Service Name not in ", keys(trstate.attr))
         }
     }
     return true
@@ -75,13 +95,16 @@ check_version = func() {
 if verify_validator() {
     if enforce_version() {
         version_check = check_version()
+        print("Forced to Check Version. ", version_check)
         release_allowed = rule { 
   	        (version_check)
         }
     } else {
+        print("Does not have to Check Version. ")
         release_allowed = rule { true }
     }
 } else {
+    print("Verify Validator Failed. Incorrect Workspace")
     release_allowed = rule { false }
 }
 
