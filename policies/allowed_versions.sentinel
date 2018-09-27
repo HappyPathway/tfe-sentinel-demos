@@ -28,6 +28,26 @@ enforce_version = func() {
     return true
 }
 
+verify_validator = func() {
+    vcstates = []
+    trstates = all_trstates()
+    for trstates as trstate {
+        enforce_version = trstate.attr.enforce_version
+        if "service_name" in keys(trstate.attr) {
+            if "service_version" in keys(trstate.attr) {
+                if "service_version_validator" in keys(trstate.attr) {
+                    if trstate.attr {
+                        if trstate.attr.service_name != tfplan.variables.service_name {
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return true
+}
+
 check_version = func() {
     vcstates = []
     trstates = all_trstates()
@@ -52,13 +72,17 @@ check_version = func() {
     return true
 }
 
-if enforce_version() {
-    version_check = check_version()
-    release_allowed = rule { 
-  	    (version_check)
+if verify_validator() {
+    if enforce_version() {
+        version_check = check_version()
+        release_allowed = rule { 
+  	        (version_check)
+        }
+    } else {
+        release_allowed = rule { true }
     }
 } else {
-    release_allowed = rule { true }
+    release_allowed = rule { false }
 }
 
 # Main rule that requires other rules to be true
